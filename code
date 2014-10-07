@@ -1,0 +1,382 @@
+%Three differential equation solvers using
+%Nonlinear shooting, Piecewise Rayleigh-Ritz and 
+%Poisson Finite Difference
+%by
+%Joshua Deiches
+
+%for Math 512 Final Exam at the University of Alabama
+
+%Revised October 7, 2014
+
+function []=finalexam()
+clear all;
+
+tic
+nonlinearshooting
+PWLRR
+PoissonFD
+toc
+end
+
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function []=nonlinearshooting()
+
+%solves Math 512 Final Exam question 2: 
+%11.5.3a using nonlinear shooting method
+
+%initial conditions
+a=1;
+b=2;
+alpha=1/2;
+beta=1/3;
+%set-up
+TOL=0.0001;
+N=5;
+M=10;                    %max iterations
+h=(b-a)/N;
+X=a:h:b;
+TK=(beta-alpha)/(b-a);
+
+k=1;
+while k<=M
+    w1(1)=alpha;
+    w2(1)=TK;
+    u(1)=0;
+    u(2)=1;
+    
+    for i=1:N
+        x=a+(i-1)*h;
+        k1=[h*w2(i) h*f(x,w1(i),w2(i))];
+        k2=[h*(w2(i)+.5*k1(2)) h*f(x+.5*h, w1(i)+.5*k1(1), w2(i)+.5*k1(2))];
+        k3=[h*(w2(i)+.5*k2(2)) h*f(x+.5*h, w1(i)+.5*k2(1), w2(i)+.5*k2(2))];
+        k4=[h*(w2(i)+k3(2)) h*f(x+h,w1(i)+k3(1),w2(i)+k3(2))];
+        
+        w1(i+1)=w1(i)+(k1(1)+2*k2(1)+2*k3(1)+k4(1))/6;
+        w2(i+1)=w2(i)+(k1(2)+2*k2(2)+2*k3(2)+k4(2))/6;
+        
+        K1=[h*u(2) h*fy(x,w1(i),w2(i))*u(1)+h*fz(x,w1(i),w2(i))*u(2)];
+        K2=[h*(u(2)+.5*K1(2)) h*fy(x+.5*h,w1(i),w2(i))*(u(1)+.5*K1(1))+...
+        h*fz(x+.5*h,w1(i),w2(i))*(u(2)+.5*K1(2))];
+        K3=[h*(u(2)+.5*K2(2)) h*fy(x+.5*h,w1(i),w2(i))*(u(1)+.5*K2(1))+...
+        h*fz(x+.5*h,w1(i),w2(i))*(u(2)+.5*K2(2))];
+        K4=[h*(u(2)+K3(2)) h*fy(x+h,w1(i),w2(i))*(u(1)+K3(1))+...
+        h*fz(x+h,w1(i),w2(i))*(u(2)+K3(2))];
+        
+        u(1)=u(1)+(K1(1)+2*K2(1)+2*K3(1)+K4(1))/6;
+        u(2)=u(2)+(K1(2)+2*K2(2)+2*K3(2)+K4(2))/6;
+    end
+        if abs(w1(N+1)-beta)<=TOL
+        else
+        TK=TK-(w1(N+1)-beta)/u(1);
+        end
+        if k>M
+            break
+            fprintf('Maximum iterations exceeded');
+        else
+            k=k+1;
+        end
+end
+
+%error and approximations
+Y=g(X);
+e=Y-w1;
+fprintf('\n Nonlinear Shooting method with TOL=.0001 produces \n');
+fprintf('i  x(i)   w1(i)        w2(i)         y(i)          error \n');
+for j=1:(N+1)
+    fprintf('%i  %1.2f   %1.5f      %1.5f      %1.5f       %2.5e \n',...
+        j,X(j),w1(j),w2(j),Y(j),e(j));
+end
+L2=(norm(e,2));
+fprintf('L2_error is %3.10e \n \n', L2);
+end
+
+%given function and partial derivatives
+    function f=f(x,y,z)
+        f=y.^3-y*z;
+    end
+
+    function fy=fy(x,y,z)
+        fy=3*(y.^2)-z;
+    end
+
+    function fz=fz(x,y,z)
+        fz=-y;
+    end
+    
+%analytical solution
+function g=g(x)
+    g=(x+1).^(-1);
+end
+
+
+
+
+
+
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function []=PWLRR
+
+%Piece-wise Linear Rayleigh-Ritz Method
+%solves 512 Final Exam question 3: 11.5.3b
+
+%approximates solution to -d/dx(p(x)*dy/dx)+q(x)*y=f(x)
+%given 0<=x<=1 and y(0)=y(1)=0, 
+
+a=0;
+b=1;
+h=0.0001;
+%h=0.00001;
+
+x=a+h:h:b;
+n=round((b-a)/h-1); %N=9999
+
+%functions p, q and f
+    function p=p(x)
+        p=exp(x);
+    end
+%~~~~~~~~~~~~~~~~~~~~
+    function q=q(x)
+        q=exp(x);
+    end
+%~~~~~~~~~~~~~~~~~~~~
+    function f=f(x)
+        f=x+(2-x).*exp(x);
+    end
+
+%because q \in C^2 we have
+Q=zeros(6,n+1);
+for i=1:n
+    Q(1,i)=h/12*(q(x(i)+q(x(i+1))));
+    Q(2,i)=h/12*(3*q(x(i))+q(x(i)-h));
+    Q(3,i)=h/12*(3*q(x(i))+q(x(i+1)));
+    Q(4,i)=(p(x(i))+p(x(i)-h))/2/h;
+    %Q(4,i)=(1/h)^(2)*(exp(x(i))-exp(x(i-1)));
+    %Q(4,i) is an elementary integral and above is the result
+    Q(5,i)=h/6*(2*f(x(i))+f(x(i)-h));
+    Q(6,i)=h/6*(2*f(x(i))+f(x(i+1)));
+end
+i=n+1;
+Q(4,i)=(p(x(i))+p(x(i)-h))/2/h;
+
+suba=zeros(n,1);
+alpha=zeros(n,1);
+supa=zeros(n,1);
+beta=zeros(n,1);
+
+b=zeros(1,n);
+
+N=n;
+
+va=zeros(N,1);
+vb=zeros(N,1);
+vc=zeros(N,1);
+vd=zeros(N,1);
+
+for i=1:N
+  vb(i)=Q(4,i)+Q(4,i+1)+Q(2,i)+Q(3,i);
+  vd(i)=Q(5,i)+Q(6,i);
+end
+for i=1:N-1
+  va(i)=-Q(4,i+1)+Q(1,i);
+end
+for i=2:N
+  vc(i)=-Q(4,i)+Q(1,i-1);
+end
+
+A =spdiags(va,-1,N,N)+spdiags(vb,0,N,N)+spdiags(vc,1,N,N);   
+%Define A as a sparse matrix
+
+c=A\vd;
+
+% va=zeros(N,1);
+% vb=zeros(N,1);
+% vc=zeros(N,1);
+% vd=zeros(N,1);
+% 
+% for i=1:N
+%   vb(i)=Q(4,i)+Q(4,i+1)+Q(2,i)+Q(3,i);
+%   vd(i)=Q(5,i)+Q(6,i);
+% end
+% for i=1:N-1
+%   va(i)=-Q(4,i+1)+Q(1,i);
+% end
+% for i=2:N
+%   vc(i)=-Q(4,i)+Q(1,i-1);
+% end
+% 
+% A =spdiags(va,-1,N,N)+spdiags(vb,0,N,N)+spdiags(vc,1,N,N);   
+% %Define A as a sparse matrix
+% 
+% c=A\vd;
+% 
+for i=1:n		%true solution
+  u(i)=(x(i)-1)*(exp(-x(i))-1);
+end
+
+plot(c-u');
+
+fprintf('\n Please press ENTER when ready to proceed to next graph. \n');
+
+pause;
+
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+%exact solution
+    function y=y(x)             
+        y=(x-1).*(exp(-x)-1);
+    end
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+err=norm(c-u')/sqrt(N);
+L2_error=err;
+fprintf('\n Piecewise Linear Rayleigh-Ritz method with h=0.0001 for solution y(x)=(x-1).*(exp(-x)-1) \n'); 
+fprintf('Note: approximation phi(x(i))=c(i)~y(x(i)) for l=1:n.\n');
+fprintf('L2_error is %3.6e \n \n',L2_error);
+end
+
+
+
+
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function [] = PoissonFD()
+%Poisson Finite Difference Method
+%solves 512 Final Exam question 4: 12.1.3b (boundaries modified)
+
+a=0;
+b=pi;
+c=0;
+d=pi/2;
+
+m=100;
+n=100;
+
+N=(m+1)*(n+1);      %dimension of coefficient matrix A
+dx=(b-a)/n;         %h
+dy=(d-c)/m;         %k 
+x=a:dx:b;           %discretized mesh points
+y=c:dy:d;
+
+A=zeros(N,N);       %setup of matrices A and B
+B=zeros(N,1);
+
+%analytical solution and Dirichlet boundary condition function
+    function u=u(x,y)
+        u=cos(x)*cos(y);
+    end
+
+%f from Poisson equation
+%f==0 is special case, Laplacian equation
+
+    function f=f(x,y)
+        f=-(cos(x+y)+cos(x-y));
+    end
+        
+%Populate matrices A and B
+%~~~~~~~~~~~Neumann Boundary Conditions
+%discretize u_x(0,y)=0
+i=1;
+for j=2:m                 
+    l=i+(m+1-j)*(n+1);
+    A(l,l)=-1/dx;
+    A(l,l+1)=1/dx;
+    B(l)=0;
+end
+
+%discretize u_y(x,pi/2)=-cos(x)
+j=m+1;
+for i=1:n                 
+    l=i+(m+1-j)*(n+1);
+    A(l,l)=1/dy;
+    A(l,l+(n+1))=-1/dy;
+    B(l)=-cos(x(i));
+end
+
+%~~~~~~~~~~~Dirichlet Boundary Conditions
+%discretize u(pi, y)=-cos(y)
+i=n+1;
+for j=1:m+1
+    l=i+(m+1-j)*(n+1);
+    A(l,l)=1;
+    B(l)=u(x(i),y(j));
+end
+
+j=1;
+for i=1:n
+    l=i+(m+1-j)*(n+1);
+    A(l,l)=1;
+    B(l)=u(x(i),y(j));
+end
+
+
+%Interior points of mesh
+for i=2:n
+    for j=2:m
+        l=i+(m+1-j)*(n+1);
+        A(l,l-1)=1/dx^2;
+        A(l,l+1)=1/dx^2;
+        
+        A(l,l)=-2/dx^2-2/dy^2;
+        
+        A(l,l-(n+1))=1/dy^2;
+        A(l,l+(n+1))=1/dy^2;
+                
+        B(l)=f(x(i),y(j));
+    end
+end
+
+[i,j,s]=find(A);
+A=sparse(i,j,s);
+w=A\B;                  %1-dimensional solution approximation, w(l)=w(i,j)
+
+U=zeros(m+1,n+1);       %NUMERICAL SOLUTION (2D)
+V=zeros(m+1,n+1);       %ANALYTICAL SOLUTION (2D)
+
+
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+%fprintf('i  j     l  x(i)      y(j)      w(l)          u(x,y)        error     \n');
+%displays results arranging points from top to bottom, left to right
+%and calculates absolute error
+%
+%uu=zeros(N,1);
+% err=0;
+% for j=(m+1):(-1):1
+%     for i=1:n+1
+%         l=i+(m+1-j)*(n+1);
+%         uu(l)=u(x(i),y(j));
+%         U(j,i)=w(l);
+%         V(j,i)=u(x(i),y(j));
+%         e(l)=abs(U(j,i)-V(j,i));        %error calculation in vector array
+%         if abs(U(j,i)-V(j,i)) > err     %L_max error
+%             err=abs(U(j,i)-V(j,i));
+%         end
+%         %fprintf('%i  %i  %4.0f  %3.4f    %3.4f    %3.8f    %3.8f    %8.5e     \n',...
+%             %i,j,l,x(i),y(j),w(l),uu(l),e(l))
+%             %~~~~take away comment to print EPIC list of results~~~~~~~~~~~~~~~~~~~~~
+%     end
+% end
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+err=0;
+for i=1:n+1
+  for j=1:m+1
+    U(j,i)=w(i+(m+1-j)*(n+1));
+    V(j,i)=u(x(i),y(j));
+    if abs(U(j,i)-V(j,i)) > err	%L_max error
+      err=abs(U(j,i)-V(j,i));
+    end
+  end
+end
+
+mesh(x,y,U-V);              %3D plot of absolute error
+xlabel('x');
+ylabel('y');
+zlabel('L_{max} error');
+fprintf('\n Poisson Finite Difference method with Neumann boundary conditions.\n');
+fprintf('We take h=pi/100 and k=pi/200. Then \n');
+fprintf('for n =%4i, m =%4i, L_max error=%22.10e\n',n,m,err);
+fprintf('See figure for 3D plot of L_max error. \n ');
+
+end
